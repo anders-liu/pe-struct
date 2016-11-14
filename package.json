@@ -1,0 +1,52 @@
+{
+	"name": "pe-struct",
+	"version": "0.9.0",
+	"description": "A JavaScript library for loading PE (Portable Executable) file as a plain structural object.",
+	"author": "Anders Liu",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/anders-liu/pe-struct.git"
+	},
+	"bugs": {
+		"url": "https://github.com/anders-liu/pe-struct/issues"
+	},
+	"devDependencies": {
+		"gulp": "^3.9.1",
+		"gulp-clean": "^0.3.2",
+		"gulp-sourcemaps": "^2.2.0",
+		"gulp-typescript": "^3.1.1",
+		"jest": "^16.0.2",
+		"ts-loader": "^0.9.5",
+		"typescript": "^2.0.3",
+		"typings": "^1.4.0",
+		"webpack": "^1.13.2",
+		"webpack-stream": "^3.2.0"
+	},
+	"dependencies": {},
+	"scripts": {
+		"test": "jest"
+	},
+	"jest": {
+		"collectCoverage": true,
+		"coverageDirectory": "out/test-results/",
+		"coverageReporters": [
+			"text",
+			"json",
+			"html"
+		],
+		"coveragePathIgnorePatterns": [
+			"/node_modules/",
+			"/out/tsc/test/"
+		],
+		"moduleDirectories": [
+			"node_modules",
+			"out/webpack"
+		],
+		"testPathDirs": [
+			"./out/tsc/test"
+		],
+		"testRegex": "-test\\.js$",
+		"verbose": true
+	}
+}

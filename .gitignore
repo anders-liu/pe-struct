@@ -1,0 +1,10 @@
+# Dev supports
+node_modules/
+typings/
+
+# Outpus
+out/
+dist/
+
+# Debug logs
+npm-debug.log*

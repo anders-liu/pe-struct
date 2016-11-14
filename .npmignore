@@ -1,0 +1,21 @@
+# Dev supports
+node_modules/
+typings/
+
+# Outpus
+out/
+
+# Debug logs
+npm-debug.log*
+
+# Source codes
+src/
+def/
+test/
+
+# Settings
+.vscode/
+.gitignore
+.npmignore
+gulpfile.js
+typings.json

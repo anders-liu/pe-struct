@@ -1,0 +1,53 @@
+﻿Note, don't build test cases every time, use the binaries in targets folder directly.
+
+SimpleNativeApp.exe:
+	"C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat"
+	cl SimpleNativeApp.cpp
+
+Simple.AnyCpu.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:anycpu /out:Simple.AnyCpu.exe Simple.cs
+
+Simple.X86.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:x86 /out:Simple.X86.exe Simple.cs
+
+Simple.X64.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:x64 /out:Simple.X64.exe /nowarn:1607 Simple.cs
+
+Simple.Itanium.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:Itanium /out:Simple.Itanium.exe /nowarn:1607 Simple.cs
+
+Simple.Arm.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:arm /out:Simple.Arm.exe /nowarn:1607 Simple.cs
+
+Simple.AnyCpu32BitPreferred.exe:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /platform:anycpu32bitpreferred /out:Simple.AnyCpu32BitPreferred.exe Simple.cs
+
+Simple.Signed.exe:
+	"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\sn.exe" -k Simple.snk
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:exe /keyfile:Simple.snk /out:Simple.Signed.exe Simple.cs
+
+Simple.dll:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:library /out:Simple.dll Simple.cs
+
+Simple.module:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:module /out:Simple.module Simple.cs
+
+Simple.winmdobj:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:winmdobj /out:Simple.winmdobj Simple.cs
+
+Chinese:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:library /out:Chinese.dll Chinese.cs
+
+FullMetadataTables:
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /t:module FullMetadataTables.Module.cs
+	"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\ResGen.exe" FullMetadataTables.Resources.txt
+	"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\ResGen.exe" FullMetadataTables.Resources.zh-CN.txt
+	"C:\Program Files (x86)\MSBuild\14.0\Bin\csc.exe" /addmodule:FullMetadataTables.Module.netmodule /res:FullMetadataTables.Resources.resources FullMetadataTables.Assembly.cs
+	mkdir zh-CN
+	"C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.6.1 Tools\al.exe" /embed:FullMetadataTables.Resources.zh-CN.resources /culture:zh-CN /out:zh-CN\FullMetadataTables.resources.dll
+
+ExceptionHandling:
+	"C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" ExceptionHandling.il /OUTPUT=ExceptionHandling.exe
+
+FieldRva:
+	"C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" FieldRva.il /OUTPUT=FieldRva.exe

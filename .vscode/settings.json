@@ -1,0 +1,53 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+	"editor.rulers": [120],
+	"editor.tabSize": 4,
+	"editor.insertSpaces": false,
+	"editor.detectIndentation": false,
+
+	"files.exclude": {
+		"**/.git": true,
+		"**/.svn": true,
+		"**/.hg": true,
+		"**/.DS_Store": true,
+		"out": false
+	},
+	"files.encoding": "utf8",
+	"files.eol": "\r\n",
+	"files.trimTrailingWhitespace": false,
+
+	"search.exclude": {
+		"**/node_modules": true,
+		"**/bower_components": true,
+		"out": true
+	},
+
+	"html.format.wrapLineLength": 120,
+	"html.format.unformatted": "a, abbr, acronym, b, bdo, big, br, button, cite, code, dfn, em, i, img, input, kbd, label, map, object, q, samp, script, select, small, span, strong, sub, sup, textarea, tt, var",
+	"html.format.indentInnerHtml": false,
+	"html.format.preserveNewLines": true,
+	"html.format.maxPreserveNewLines": null,
+	"html.format.indentHandlebars": false,
+	"html.format.endWithNewline": true,
+	"html.format.extraLiners": "head, body, /html",
+
+	"typescript.format.insertSpaceAfterCommaDelimiter": true,
+	"typescript.format.insertSpaceAfterSemicolonInForStatements": true,
+	"typescript.format.insertSpaceBeforeAndAfterBinaryOperators": true,
+	"typescript.format.insertSpaceAfterKeywordsInControlFlowStatements": true,
+	"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+	"typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+	"typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+	"typescript.format.placeOpenBraceOnNewLineForFunctions": false,
+	"typescript.format.placeOpenBraceOnNewLineForControlBlocks": false,
+	"javascript.format.insertSpaceAfterCommaDelimiter": true,
+	"javascript.format.insertSpaceAfterSemicolonInForStatements": true,
+	"javascript.format.insertSpaceBeforeAndAfterBinaryOperators": true,
+	"javascript.format.insertSpaceAfterKeywordsInControlFlowStatements": true,
+	"javascript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+	"javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+	"javascript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+	"javascript.format.placeOpenBraceOnNewLineForFunctions": false,
+	"javascript.format.placeOpenBraceOnNewLineForControlBlocks": false,
+	"typescript.tsdk": "./node_modules/typescript/lib"
+}
