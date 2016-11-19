@@ -1,4 +1,4 @@
-// Type definitions for pe-struct v0.9.1
+// Type definitions for pe-struct v0.9.2
 // Project: https://github.com/anders-liu/pe-struct/
 // Definitions by: Anders Liu <https://github.com/anders-liu/>
 
