@@ -573,6 +573,21 @@ function loadMetadata(pe: PE.PeStruct) {
 	pos = U.rvaToOffset(pe, dd.Rva.value);
 	const cliHeader = loadCliHeader(pe.data, pos);
 
+	let ManRes: PE.FileDataVec<PE.ManResItem>;
+	const ddmr = cliHeader.Resources;
+	if (ddmr.Rva.value > 0 && ddmr.Size.value > 0) {
+		pos = U.rvaToOffset(pe, ddmr.Rva.value);
+		const end = pos + ddmr.Size.value;
+		ManRes = loadFileDataVecByStop(pe.data, pos, (i) => i._off + i._sz >= end, loadManResItem);
+	}
+
+	let SNSignature: PE.FileData;
+	const ddsn = cliHeader.StrongNameSignature;
+	if (ddsn.Rva.value > 0 && ddsn.Size.value > 0) {
+		pos = U.rvaToOffset(pe, ddsn.Rva.value);
+		SNSignature = loadFileData(pe.data, pos, ddsn.Size.value);
+	}
+
 	pos = U.rvaToOffset(pe, cliHeader.MetaData.Rva.value);
 	const mdRoot = loadMdRoot(pe.data, pos);
 
@@ -606,6 +621,8 @@ function loadMetadata(pe: PE.PeStruct) {
 
 	return Object.assign({
 		cliHeader,
+		ManRes,
+		SNSignature,
 		mdRoot,
 		mdsStrings,
 		mdsUS,
@@ -670,6 +687,26 @@ function loadCliHeader(d: DataView, _off: number): PE.CliHeader {
 		VTableFixups,
 		ExportAddressTableJumps,
 		ManagedNativeHeader,
+	};
+}
+
+function loadManResItem(d: DataView, _off: number): PE.ManResItem {
+	let pos = _off;
+
+	const Size = loadU4(d, pos);
+	pos += Size._sz;
+
+	const Data = loadFileData(d, pos, Size.value);
+	pos += Data._sz;
+
+	const Padding = loadFileData(d, pos, calculatePaddingSize(Data._sz));
+	pos += Padding._sz;
+
+	return {
+		_off, _sz: pos - _off,
+		Size,
+		Data,
+		Padding,
 	};
 }
 
@@ -2195,6 +2232,506 @@ function loadMdtGenericParamConstraint(d: DataView, _off: number, ctx: MdtLoadin
 }
 
 //-----------------------------------------------------------------------------------------------------------------
+// IL.
+//-----------------------------------------------------------------------------------------------------------------
+
+export function loadIL(pe: PE.PeStruct, m: PE.MdtMethodDefItem): PE.ILMethod {
+	if (pe == null || m == null || !U.hasIL(m)) {
+		return null;
+	}
+
+	let _off = U.rvaToOffset(pe, m.RVA.value);
+	let pos = _off;
+
+	const Header = loadILMethodHeader(pe.data, pos);
+	pos += Header._sz;
+
+	const end = pos + Header.codeSizeValue;
+	const Body = loadFileDataVecByStop(pe.data, pos, i => i._off + i._sz >= end, loadILInst);
+	pos += Body._sz;
+
+	const Padding = loadFileData(pe.data, pos, calculatePaddingSize(Body._sz));
+	pos += Padding._sz;
+
+	let Sections: PE.FileDataVec<PE.ILMethodSection>;
+	if (Header.flagsValue & PE.ILMethodFlags.MoreSects) {
+		Sections = loadFileDataVecByStop(pe.data, pos,
+			m => !(m.Kind.value & PE.ILMethodSectionKind.MoreSects),
+			loadILMethodSection);
+		pos += Sections._sz;
+	}
+
+	return {
+		_off, _sz: pos - _off,
+		Header,
+		Body,
+		Padding,
+		Sections
+	};
+}
+
+function loadILMethodHeader(d: DataView, _off: number): PE.ILMethodHeader {
+	const flag = d.getUint8(_off);
+	switch (flag & PE.ILMethodFlags.Format__Mask) {
+		case PE.ILMethodFlags.Format_TinyFormat:
+			return loadILMethodHeaderTiny(d, _off);
+		case PE.ILMethodFlags.Format_FatFormat:
+			return loadILMethodHeaderFat(d, _off);
+		default:
+			throw new E.PeError(E.PeErrorType.InvalidMethodHeaderFormat, _off, 1, flag);
+	}
+}
+
+function loadILMethodHeaderTiny(d: DataView, _off: number): PE.ILMethodHeaderTiny {
+	let pos = _off;
+
+	const FlagsAndCodeSize = loadU1(d, pos);
+	pos += FlagsAndCodeSize._sz;
+
+	const flagsValue: PE.ILMethodFlags = FlagsAndCodeSize.value & 0x03;
+	const codeSizeValue = FlagsAndCodeSize.value >> 2;
+
+	return {
+		_off, _sz: pos - _off,
+		flagsValue,
+		codeSizeValue,
+		FlagsAndCodeSize,
+	};
+}
+
+function loadILMethodHeaderFat(d: DataView, _off: number): PE.ILMethodHeaderFat {
+	let pos = _off;
+
+	const Flags = loadE2<PE.ILMethodFlags>(d, pos);
+	pos += Flags._sz;
+
+	const MaxStack = loadU2(d, pos);
+	pos += MaxStack._sz;
+
+	const CodeSize = loadU4(d, pos);
+	pos += CodeSize._sz;
+
+	const LocalVariableSignature = loadMdToken(d, pos);
+	pos += LocalVariableSignature._sz;
+
+	return {
+		_off, _sz: pos - _off,
+		flagsValue: Flags.value,
+		codeSizeValue: CodeSize.value,
+		Flags,
+		MaxStack,
+		CodeSize,
+		LocalVariableSignature
+	};
+}
+
+function loadILSwitchOprand(d: DataView, _off: number): PE.ILSwitchOprandField {
+	let pos = _off;
+
+	const count = loadU4(d, pos);
+	pos += count._sz;
+
+	const targets = loadFileDataVecByCount(d, pos, count.value, loadI4);
+	pos += targets._sz;
+
+	return {
+		_off, _sz: pos - _off,
+		count,
+		targets
+	};
+}
+
+function loadILInst(d: DataView, _off: number): PE.ILInst {
+	let pos = _off;
+
+	const opcode = loadOpcode(d, pos);
+	pos += opcode._sz;
+
+	let oprand: PE.NumberField | PE.U8Field | PE.I8Field | PE.MdTokenField | PE.ILSwitchOprandField;
+	switch (opcode.value) {
+		case PE.ILOpcode.nop: break;
+		case PE.ILOpcode.break: break;
+		case PE.ILOpcode.ldarg_0: break;
+		case PE.ILOpcode.ldarg_1: break;
+		case PE.ILOpcode.ldarg_2: break;
+		case PE.ILOpcode.ldarg_3: break;
+		case PE.ILOpcode.ldloc_0: break;
+		case PE.ILOpcode.ldloc_1: break;
+		case PE.ILOpcode.ldloc_2: break;
+		case PE.ILOpcode.ldloc_3: break;
+		case PE.ILOpcode.stloc_0: break;
+		case PE.ILOpcode.stloc_1: break;
+		case PE.ILOpcode.stloc_2: break;
+		case PE.ILOpcode.stloc_3: break;
+		case PE.ILOpcode.ldarg_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.ldarga_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.starg_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.ldloc_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.ldloca_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.stloc_s: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.ldnull: break;
+		case PE.ILOpcode.ldc_i4_m1: break;
+		case PE.ILOpcode.ldc_i4_0: break;
+		case PE.ILOpcode.ldc_i4_1: break;
+		case PE.ILOpcode.ldc_i4_2: break;
+		case PE.ILOpcode.ldc_i4_3: break;
+		case PE.ILOpcode.ldc_i4_4: break;
+		case PE.ILOpcode.ldc_i4_5: break;
+		case PE.ILOpcode.ldc_i4_6: break;
+		case PE.ILOpcode.ldc_i4_7: break;
+		case PE.ILOpcode.ldc_i4_8: break;
+		case PE.ILOpcode.ldc_i4_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.ldc_i4: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.ldc_i8: oprand = loadI8(d, pos); break;
+		case PE.ILOpcode.ldc_r4: oprand = loadR4(d, pos); break;
+		case PE.ILOpcode.ldc_r8: oprand = loadR8(d, pos); break;
+		case PE.ILOpcode.dup: break;
+		case PE.ILOpcode.pop: break;
+		case PE.ILOpcode.jmp: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.call: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.calli: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ret: break;
+		case PE.ILOpcode.br_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.brfalse_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.brtrue_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.beq_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.bge_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.bgt_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.ble_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.blt_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.bne_un_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.bge_un_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.bgt_un_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.ble_un_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.blt_un_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.br: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.brfalse: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.brtrue: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.beq: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.bge: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.bgt: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.ble: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.blt: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.bne_un: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.bge_un: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.bgt_un: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.ble_un: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.blt_un: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.switch: oprand = loadILSwitchOprand(d, pos); break;
+		case PE.ILOpcode.ldind_i1: break;
+		case PE.ILOpcode.ldind_u1: break;
+		case PE.ILOpcode.ldind_i2: break;
+		case PE.ILOpcode.ldind_u2: break;
+		case PE.ILOpcode.ldind_i4: break;
+		case PE.ILOpcode.ldind_u4: break;
+		case PE.ILOpcode.ldind_i8: break;
+		case PE.ILOpcode.ldind_i: break;
+		case PE.ILOpcode.ldind_r4: break;
+		case PE.ILOpcode.ldind_r8: break;
+		case PE.ILOpcode.ldind_ref: break;
+		case PE.ILOpcode.stind_ref: break;
+		case PE.ILOpcode.stind_i1: break;
+		case PE.ILOpcode.stind_i2: break;
+		case PE.ILOpcode.stind_i4: break;
+		case PE.ILOpcode.stind_i8: break;
+		case PE.ILOpcode.stind_r4: break;
+		case PE.ILOpcode.stind_r8: break;
+		case PE.ILOpcode.add: break;
+		case PE.ILOpcode.sub: break;
+		case PE.ILOpcode.mul: break;
+		case PE.ILOpcode.div: break;
+		case PE.ILOpcode.div_un: break;
+		case PE.ILOpcode.rem: break;
+		case PE.ILOpcode.rem_un: break;
+		case PE.ILOpcode.and: break;
+		case PE.ILOpcode.or: break;
+		case PE.ILOpcode.xor: break;
+		case PE.ILOpcode.shl: break;
+		case PE.ILOpcode.shr: break;
+		case PE.ILOpcode.shr_un: break;
+		case PE.ILOpcode.neg: break;
+		case PE.ILOpcode.not: break;
+		case PE.ILOpcode.conv_i1: break;
+		case PE.ILOpcode.conv_i2: break;
+		case PE.ILOpcode.conv_i4: break;
+		case PE.ILOpcode.conv_i8: break;
+		case PE.ILOpcode.conv_r4: break;
+		case PE.ILOpcode.conv_r8: break;
+		case PE.ILOpcode.conv_u4: break;
+		case PE.ILOpcode.conv_u8: break;
+		case PE.ILOpcode.callvirt: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.cpobj: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldobj: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldstr: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.newobj: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.castclass: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.isinst: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.conv_r_un: break;
+		case PE.ILOpcode.unbox: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.throw: break;
+		case PE.ILOpcode.ldfld: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldflda: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.stfld: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldsfld: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldsflda: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.stsfld: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.stobj: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.conv_ovf_i1_un: break;
+		case PE.ILOpcode.conv_ovf_i2_un: break;
+		case PE.ILOpcode.conv_ovf_i4_un: break;
+		case PE.ILOpcode.conv_ovf_i8_un: break;
+		case PE.ILOpcode.conv_ovf_u1_un: break;
+		case PE.ILOpcode.conv_ovf_u2_un: break;
+		case PE.ILOpcode.conv_ovf_u4_un: break;
+		case PE.ILOpcode.conv_ovf_u8_un: break;
+		case PE.ILOpcode.conv_ovf_i_un: break;
+		case PE.ILOpcode.conv_ovf_u_un: break;
+		case PE.ILOpcode.box: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.newarr: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldlen: break;
+		case PE.ILOpcode.ldelema: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldelem_i1: break;
+		case PE.ILOpcode.ldelem_u1: break;
+		case PE.ILOpcode.ldelem_i2: break;
+		case PE.ILOpcode.ldelem_u2: break;
+		case PE.ILOpcode.ldelem_i4: break;
+		case PE.ILOpcode.ldelem_u4: break;
+		case PE.ILOpcode.ldelem_i8: break;
+		case PE.ILOpcode.ldelem_i: break;
+		case PE.ILOpcode.ldelem_r4: break;
+		case PE.ILOpcode.ldelem_r8: break;
+		case PE.ILOpcode.ldelem_ref: break;
+		case PE.ILOpcode.stelem_i: break;
+		case PE.ILOpcode.stelem_i1: break;
+		case PE.ILOpcode.stelem_i2: break;
+		case PE.ILOpcode.stelem_i4: break;
+		case PE.ILOpcode.stelem_i8: break;
+		case PE.ILOpcode.stelem_r4: break;
+		case PE.ILOpcode.stelem_r8: break;
+		case PE.ILOpcode.stelem_ref: break;
+		case PE.ILOpcode.ldelem: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.stelem: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.unbox_any: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.conv_ovf_i1: break;
+		case PE.ILOpcode.conv_ovf_u1: break;
+		case PE.ILOpcode.conv_ovf_i2: break;
+		case PE.ILOpcode.conv_ovf_u2: break;
+		case PE.ILOpcode.conv_ovf_i4: break;
+		case PE.ILOpcode.conv_ovf_u4: break;
+		case PE.ILOpcode.conv_ovf_i8: break;
+		case PE.ILOpcode.conv_ovf_u8: break;
+		case PE.ILOpcode.refanyval: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ckfinite: break;
+		case PE.ILOpcode.mkrefany: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldtoken: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.conv_u2: break;
+		case PE.ILOpcode.conv_u1: break;
+		case PE.ILOpcode.conv_i: break;
+		case PE.ILOpcode.conv_ovf_i: break;
+		case PE.ILOpcode.conv_ovf_u: break;
+		case PE.ILOpcode.add_ovf: break;
+		case PE.ILOpcode.add_ovf_un: break;
+		case PE.ILOpcode.mul_ovf: break;
+		case PE.ILOpcode.mul_ovf_un: break;
+		case PE.ILOpcode.sub_ovf: break;
+		case PE.ILOpcode.sub_ovf_un: break;
+		case PE.ILOpcode.endfinally: break;
+		case PE.ILOpcode.leave: oprand = loadI4(d, pos); break;
+		case PE.ILOpcode.leave_s: oprand = loadI1(d, pos); break;
+		case PE.ILOpcode.stind_i: break;
+		case PE.ILOpcode.conv_u: break;
+		case PE.ILOpcode.arglist: break;
+		case PE.ILOpcode.ceq: break;
+		case PE.ILOpcode.cgt: break;
+		case PE.ILOpcode.cgt_un: break;
+		case PE.ILOpcode.clt: break;
+		case PE.ILOpcode.clt_un: break;
+		case PE.ILOpcode.ldftn: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldvirtftn: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.ldarg: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.ldarga: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.starg: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.ldloc: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.ldloca: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.stloc: oprand = loadU4(d, pos); break;
+		case PE.ILOpcode.localloc: break;
+		case PE.ILOpcode.endfilter: break;
+		case PE.ILOpcode.unaligned_: oprand = loadU1(d, pos); break;
+		case PE.ILOpcode.volatile_: break;
+		case PE.ILOpcode.tail_: break;
+		case PE.ILOpcode.initobj: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.constrained_: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.cpblk: break;
+		case PE.ILOpcode.initblk: break;
+		case PE.ILOpcode.no_: break;
+		case PE.ILOpcode.rethrow: break;
+		case PE.ILOpcode.sizeof: oprand = loadMdToken(d, pos); break;
+		case PE.ILOpcode.refanytype: break;
+		case PE.ILOpcode.readonly_: break;
+		default: throw new E.PeError(E.PeErrorType.InvalidILOpcode, opcode._off, opcode._sz, <number>opcode.value);
+	}
+	pos += (oprand) ? oprand._sz : 0;
+
+	return {
+		_off, _sz: pos - _off,
+		opcode,
+		oprand
+	};
+}
+
+function loadOpcode(d: DataView, _off: number): PE.E1Field<PE.ILOpcode> | PE.E2Field<PE.ILOpcode> {
+	chk(d, _off, 1);
+	const b = d.getUint8(_off);
+	if (b == 0xFE) {
+		return loadE2<PE.ILOpcode>(d, _off);
+	} else {
+		return loadE1<PE.ILOpcode>(d, _off);
+	}
+}
+
+function loadILMethodSection(d: DataView, _off: number): PE.ILMethodSection {
+	let pos = _off;
+
+	const Kind = loadE1<PE.ILMethodSectionKind>(d, pos);
+	pos += Kind._sz;
+
+	if (Kind.value & PE.ILMethodSectionKind.FatFormat) {
+		const DataSizeBytes = loadFileData(d, pos, 3);
+		const dataSize = d.getUint8(pos)
+			| (d.getUint8(pos + 1) << 8)
+			| (d.getUint8(pos + 2) << 16);
+		pos += DataSizeBytes._sz;
+
+		const end = _off + dataSize;
+		const Clauses = loadFileDataVecByStop(d, pos,
+			i => i._off + i._sz >= end, loadILEHClauseFat);
+		pos += Clauses._sz;
+
+		adjustILEHClauseCusage(Clauses.values);
+
+		return {
+			_off, _sz: pos - _off,
+			Kind,
+			DataSizeBytes,
+			Clauses,
+			dataSize
+		};
+	}
+	else {
+		const DataSizeBytes = loadFileData(d, pos, 1);
+		const dataSize = d.getUint8(pos);
+		pos += DataSizeBytes._sz;
+
+		const Padding = loadFileData(d, pos, 2);
+		pos += Padding._sz;
+
+		const end = _off + dataSize;
+		const Clauses = loadFileDataVecByStop(d, pos,
+			i => i._off + i._sz >= end, loadILEHClauseSmall);
+		pos += Clauses._sz;
+
+		adjustILEHClauseCusage(Clauses.values);
+
+		return {
+			_off, _sz: pos - _off,
+			Kind,
+			DataSizeBytes,
+			Padding,
+			Clauses,
+			dataSize
+		};
+	}
+}
+
+function loadILEHClauseSmall(d: DataView, _off: number): PE.ILEHClause {
+	let pos = _off;
+
+	const Flags = loadE2<PE.ILEHClauseFlags>(d, pos);
+	pos += Flags._sz;
+
+	const TryOffset = loadU2(d, pos);
+	pos += TryOffset._sz;
+
+	const TryLength = loadU1(d, pos);
+	pos += TryLength._sz;
+
+	const HandlerOffset = loadU2(d, pos);
+	pos += HandlerOffset._sz;
+
+	const HandlerLength = loadU1(d, pos);
+	pos += HandlerLength._sz;
+
+	const ClassTokenOrFilterOffset = loadU4(d, pos);
+	pos += ClassTokenOrFilterOffset._sz;
+
+	return {
+		_off, _sz: pos - _off,
+		Flags,
+		TryOffset,
+		TryLength,
+		HandlerOffset,
+		HandlerLength,
+		ClassTokenOrFilterOffset,
+		usage: PE.ILEHClauseUsage.None
+	}
+}
+
+function loadILEHClauseFat(d: DataView, _off: number): PE.ILEHClause {
+	let pos = _off;
+
+	const Flags = loadE4<PE.ILEHClauseFlags>(d, pos);
+	pos += Flags._sz;
+
+	const TryOffset = loadU4(d, pos);
+	pos += TryOffset._sz;
+
+	const TryLength = loadU4(d, pos);
+	pos += TryLength._sz;
+
+	const HandlerOffset = loadU4(d, pos);
+	pos += HandlerOffset._sz;
+
+	const HandlerLength = loadU4(d, pos);
+	pos += HandlerLength._sz;
+
+	const ClassTokenOrFilterOffset = loadU4(d, pos);
+	pos += ClassTokenOrFilterOffset._sz;
+
+	return {
+		_off, _sz: pos - _off,
+		Flags,
+		TryOffset,
+		TryLength,
+		HandlerOffset,
+		HandlerLength,
+		ClassTokenOrFilterOffset,
+		usage: PE.ILEHClauseUsage.None
+	}
+}
+
+function adjustILEHClauseCusage(clauses: PE.ILEHClause[]) {
+	let pc: PE.ILEHClause = null;
+	for (let c of clauses) {
+		switch (c.Flags.value) {
+			case PE.ILEHClauseFlags.None:
+				c.usage = PE.ILEHClauseUsage.UseClassToken;
+				break;
+			case PE.ILEHClauseFlags.Filter:
+				c.usage = PE.ILEHClauseUsage.UseFilterOffset;
+				break;
+			case PE.ILEHClauseFlags.Finally:
+			case PE.ILEHClauseFlags.Fault:
+				if (pc != null
+					&& pc.TryOffset.value == c.TryOffset.value
+					&& pc.TryLength.value == c.TryLength.value)
+					c.usage = pc.usage;
+				break;
+		}
+		pc = c;
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------------------
 // Common Structures.
 //-----------------------------------------------------------------------------------------------------------------
 
@@ -2221,6 +2758,40 @@ function loadU8(d: DataView, _off: number): PE.U8Field {
 	const low = d.getUint32(_off, true);
 	const high = d.getUint32(_off + 4, true);
 	return { _off, _sz: 8, low, high };
+}
+
+function loadI1(d: DataView, _off: number): PE.I1Field {
+	chk(d, _off, 1);
+	const value = d.getInt8(_off);
+	return { _off, _sz: 1, value };
+}
+
+function loadI2(d: DataView, _off: number): PE.I2Field {
+	chk(d, _off, 2);
+	const value = d.getInt16(_off, true);
+	return { _off, _sz: 2, value };
+}
+
+function loadI4(d: DataView, _off: number): PE.I4Field {
+	chk(d, _off, 4);
+	const value = d.getInt32(_off, true);
+	return { _off, _sz: 4, value };
+}
+
+function loadI8(d: DataView, _off: number): PE.I8Field {
+	return loadU8(d, _off);
+}
+
+function loadR4(d: DataView, _off: number): PE.R4Field {
+	chk(d, _off, 4);
+	const value = d.getFloat32(_off, true);
+	return { _off, _sz: 4, value };
+}
+
+function loadR8(d: DataView, _off: number): PE.R8Field {
+	chk(d, _off, 8);
+	const value = d.getFloat64(_off, true);
+	return { _off, _sz: 8, value };
 }
 
 function loadCompressedUint(d: DataView, _off: number): PE.CompressedUintField {
@@ -2362,6 +2933,14 @@ function decodeCodedToken(token: number, cti: MdCodedTokenInfo): { tid: PE.MdTab
 	const tid = cti.tables[token & ((1 << cti.tagSize) - 1)];
 	const rid = token >> cti.tagSize;
 	return { tid, rid };
+}
+
+function loadMdToken(d: DataView, _off: number): PE.MdTokenField {
+	chk(d, _off, 4);
+	const value = d.getUint32(_off, true);
+	const tid: PE.MdTableIndex = (value & 0xFF000000) >> 24;
+	const rid = value & 0x00FFFFFF;
+	return { _off, _sz: 4, tid, rid };
 }
 
 function calculatePaddingSize(dataSize: number, packSize: number = 4): number {

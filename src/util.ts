@@ -64,6 +64,18 @@ export function hasMetadata(pe: PE.PeStruct): boolean {
 	return dd.Rva.value > 0 && dd.Size.value > 0;
 }
 
+export function hasManRes(pe: PE.PeStruct): boolean {
+	return (hasMetadata(pe)
+		&& pe.cliHeader.Resources.Rva.value > 0
+		&& pe.cliHeader.Resources.Size.value > 0);
+}
+
+export function hasSNSignature(pe: PE.PeStruct): boolean {
+	return (hasMetadata(pe)
+		&& pe.cliHeader.StrongNameSignature.Rva.value > 0
+		&& pe.cliHeader.StrongNameSignature.Size.value > 0);
+}
+
 export function hasIL(methodDef: PE.MdtMethodDefItem): boolean {
 	return (methodDef.RVA.value > 0
 		&& (methodDef.ImplFlags.value & PE.CorMethodImpl.ct__Mask) == PE.CorMethodImpl.ct_IL

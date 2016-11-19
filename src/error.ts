@@ -12,6 +12,8 @@ export enum PeErrorType {
 	InvalidNumberOfDataDirectories,
 	InvalidSizeOfCliHeader,
 	InvalidMdSignature,
+	InvalidMethodHeaderFormat,
+	InvalidILOpcode,
 }
 
 export class PeError {

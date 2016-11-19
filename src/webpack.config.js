@@ -12,7 +12,8 @@ module.exports = {
 	},
 	module: {
 		loaders: [
-			{ test: /\.ts$/, loader: "ts-loader" }
+			{ test: /\.ts$/, loader: "ts-loader" },
+			{ test: /\.js$/, loader: 'babel', query: { compact: false } }
 		],
 		preLoaders: [
 			{ test: /\.js$/, loader: "source-map-loader" }

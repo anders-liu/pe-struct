@@ -126,8 +126,9 @@ describe("PeLoader", () => {
 	describe("Metadata", () => {
 		const pe32 = TestCases.load("Simple.X86.exe__");
 		const peChs = TestCases.load("Chinese.dll__");
-		const peFull = TestCases.load("FullMetadataTables.Assembly.exe__");
+		const peFullMD = TestCases.load("FullMetadataTables.Assembly.exe__");
 		const peFrva = TestCases.load("FieldRva.exe__");
+		const peSigned = TestCases.load("Simple.Signed.exe__");
 
 		test("cliHeader", () => {
 			const d = pe32.cliHeader;
@@ -139,6 +140,35 @@ describe("PeLoader", () => {
 
 			expect(d._off).toEqual(0x208);
 			expect(d._sz).toEqual(72);
+		});
+
+		test("ManRes", () => {
+			const d = peFullMD.ManRes;
+			expect(d).toEqual({
+				"_off": 6188, "_sz": 240,
+				"values": [{
+					"_off": 6188, "_sz": 236,
+					"Size": { "_off": 6188, "_sz": 4, "value": 230 },
+					"Data": { "_off": 6192, "_sz": 230 },
+					"Padding": { "_off": 6422, "_sz": 2 }
+				}, {
+					"_off": 6424, "_sz": 4,
+					"Size": { "_off": 6424, "_sz": 4, "value": 0 },
+					"Data": { "_off": 6428, "_sz": 0 },
+					"Padding": { "_off": 6428, "_sz": 0 }
+				}]
+			});
+		});
+
+		test("SNSignature", () => {
+			const d = peSigned.SNSignature;
+			expect(d).toEqual({ "_off": 1560, "_sz": 128 });
+
+			const a = peSigned.mdtAssembly.values[0];
+			const blobPos = a.PublicKey.value + peSigned.mdsBlob._off;
+			const b = peSigned.mdsBlob.values.filter(d => d._off == blobPos);
+
+			expect(b[0].data).toEqual({ "_off": 1344, "_sz": 160 });
 		});
 
 		test("mdRoot", () => {
@@ -317,7 +347,7 @@ describe("PeLoader", () => {
 		});
 
 		test("mdTableHeader - Full Tables", () => {
-			const d = peFull.mdTableHeader;
+			const d = peFullMD.mdTableHeader;
 
 			expect(d.MajorVersion.value).toEqual(2);
 			expect(d.MinorVersion.value).toEqual(0);
@@ -335,7 +365,7 @@ describe("PeLoader", () => {
 		});
 
 		test("mdTableRows - Full Tables", () => {
-			const d = peFull.mdTableRows;
+			const d = peFullMD.mdTableRows;
 			expect(d[PE.MdTableIndex.Module]).toEqual(1);
 			expect(d[PE.MdTableIndex.TypeRef]).toEqual(29);
 			expect(d[PE.MdTableIndex.TypeDef]).toEqual(12);
@@ -1039,6 +1069,933 @@ describe("PeLoader", () => {
 					"_off": 3324, "_sz": 4,
 					"Owner": { "_off": 3324, "_sz": 2, "value": 3 },
 					"Constraint": { "_off": 3326, "_sz": 2, "tid": 2, "rid": 2 }
+				}]
+			});
+		});
+	});
+
+	describe("IL", () => {
+		const peFullMD = TestCases.load("FullMetadataTables.Assembly.exe__");
+		const peFullIL = TestCases.load("FullIL.exe__");
+		const peEH = TestCases.load("ExceptionHandling.exe__");
+
+		test("ILMethodHeaderTiny", () => {
+			const mr = peFullMD.mdtMethodDef.values[12];
+			const m = PE.loadIL(peFullMD, mr);
+			expect(m.Header).toEqual({
+				"_off": 1069, "_sz": 1,
+				"flagsValue": 2,
+				"codeSizeValue": 12,
+				"FlagsAndCodeSize": { "_off": 1069, "_sz": 1, "value": 50 },
+			});
+		});
+
+		test("ILMethodHeaderFat", () => {
+			const mr = peFullMD.mdtMethodDef.values[11];
+			const m = PE.loadIL(peFullMD, mr);
+			expect(m.Header).toEqual({
+				"_off": 944, "_sz": 12,
+				"flagsValue": 12307,
+				"codeSizeValue": 113,
+				"Flags": { "_off": 944, "_sz": 2, "value": 12307 },
+				"MaxStack": { "_off": 946, "_sz": 2, "value": 2 },
+				"CodeSize": { "_off": 948, "_sz": 4, "value": 113 },
+				"LocalVariableSignature": { "_off": 952, "_sz": 4, "tid": 17, "rid": 5 }
+			});
+		});
+
+		test("ILMethod.Body", () => {
+			const mr = peFullIL.mdtMethodDef.values[0];
+			const m = PE.loadIL(peFullIL, mr);
+			expect(m.Body).toEqual({
+				"_off": 604, "_sz": 503, "values": [{
+					"_off": 604, "_sz": 1, "opcode": { "_off": 604, "_sz": 1, "value": 0 }
+				}, {
+					"_off": 605, "_sz": 1, "opcode": { "_off": 605, "_sz": 1, "value": 1 }
+				}, {
+					"_off": 606, "_sz": 1, "opcode": { "_off": 606, "_sz": 1, "value": 2 }
+				}, {
+					"_off": 607, "_sz": 1, "opcode": { "_off": 607, "_sz": 1, "value": 3 }
+				}, {
+					"_off": 608, "_sz": 1, "opcode": { "_off": 608, "_sz": 1, "value": 4 }
+				}, {
+					"_off": 609, "_sz": 1, "opcode": { "_off": 609, "_sz": 1, "value": 5 }
+				}, {
+					"_off": 610, "_sz": 1, "opcode": { "_off": 610, "_sz": 1, "value": 6 }
+				}, {
+					"_off": 611, "_sz": 1, "opcode": { "_off": 611, "_sz": 1, "value": 7 }
+				}, {
+					"_off": 612, "_sz": 1, "opcode": { "_off": 612, "_sz": 1, "value": 8 }
+				}, {
+					"_off": 613, "_sz": 1, "opcode": { "_off": 613, "_sz": 1, "value": 9 }
+				}, {
+					"_off": 614, "_sz": 1, "opcode": { "_off": 614, "_sz": 1, "value": 10 }
+				}, {
+					"_off": 615, "_sz": 1, "opcode": { "_off": 615, "_sz": 1, "value": 11 }
+				}, {
+					"_off": 616, "_sz": 1, "opcode": { "_off": 616, "_sz": 1, "value": 12 }
+				}, {
+					"_off": 617, "_sz": 1, "opcode": { "_off": 617, "_sz": 1, "value": 13 }
+				}, {
+					"_off": 618, "_sz": 2, "opcode": { "_off": 618, "_sz": 1, "value": 14 },
+					"oprand": { "_off": 619, "_sz": 1, "value": 14 }
+				}, {
+					"_off": 620, "_sz": 2, "opcode": { "_off": 620, "_sz": 1, "value": 15 },
+					"oprand": { "_off": 621, "_sz": 1, "value": 15 }
+				}, {
+					"_off": 622, "_sz": 2, "opcode": { "_off": 622, "_sz": 1, "value": 16 },
+					"oprand": { "_off": 623, "_sz": 1, "value": 16 }
+				}, {
+					"_off": 624, "_sz": 2, "opcode": { "_off": 624, "_sz": 1, "value": 17 },
+					"oprand": { "_off": 625, "_sz": 1, "value": 17 }
+				}, {
+					"_off": 626, "_sz": 2, "opcode": { "_off": 626, "_sz": 1, "value": 18 },
+					"oprand": { "_off": 627, "_sz": 1, "value": 18 }
+				}, {
+					"_off": 628, "_sz": 2, "opcode": { "_off": 628, "_sz": 1, "value": 19 },
+					"oprand": { "_off": 629, "_sz": 1, "value": 19 }
+				}, {
+					"_off": 630, "_sz": 1, "opcode": { "_off": 630, "_sz": 1, "value": 20 }
+				}, {
+					"_off": 631, "_sz": 1, "opcode": { "_off": 631, "_sz": 1, "value": 21 }
+				}, {
+					"_off": 632, "_sz": 1, "opcode": { "_off": 632, "_sz": 1, "value": 22 }
+				}, {
+					"_off": 633, "_sz": 1, "opcode": { "_off": 633, "_sz": 1, "value": 23 }
+				}, {
+					"_off": 634, "_sz": 1, "opcode": { "_off": 634, "_sz": 1, "value": 24 }
+				}, {
+					"_off": 635, "_sz": 1, "opcode": { "_off": 635, "_sz": 1, "value": 25 }
+				}, {
+					"_off": 636, "_sz": 1, "opcode": { "_off": 636, "_sz": 1, "value": 26 }
+				}, {
+					"_off": 637, "_sz": 1, "opcode": { "_off": 637, "_sz": 1, "value": 27 }
+				}, {
+					"_off": 638, "_sz": 1, "opcode": { "_off": 638, "_sz": 1, "value": 28 }
+				}, {
+					"_off": 639, "_sz": 1, "opcode": { "_off": 639, "_sz": 1, "value": 29 }
+				}, {
+					"_off": 640, "_sz": 1, "opcode": { "_off": 640, "_sz": 1, "value": 30 }
+				}, {
+					"_off": 641, "_sz": 2, "opcode": { "_off": 641, "_sz": 1, "value": 31 },
+					"oprand": { "_off": 642, "_sz": 1, "value": -31 }
+				}, {
+					"_off": 643, "_sz": 5, "opcode": { "_off": 643, "_sz": 1, "value": 32 },
+					"oprand": { "_off": 644, "_sz": 4, "value": -32 }
+				}, {
+					"_off": 648, "_sz": 9, "opcode": { "_off": 648, "_sz": 1, "value": 33 },
+					"oprand": { "_off": 649, "_sz": 8, "low": 4294967263, "high": 4294967295 }
+				}, {
+					"_off": 657, "_sz": 5, "opcode": { "_off": 657, "_sz": 1, "value": 34 },
+					"oprand": { "_off": 658, "_sz": 4, "value": 34.34000015258789 }
+				}, {
+					"_off": 662, "_sz": 9, "opcode": { "_off": 662, "_sz": 1, "value": 35 },
+					"oprand": { "_off": 663, "_sz": 8, "value": 35.35 }
+				}, {
+					"_off": 671, "_sz": 1, "opcode": { "_off": 671, "_sz": 1, "value": 37 }
+				}, {
+					"_off": 672, "_sz": 1, "opcode": { "_off": 672, "_sz": 1, "value": 38 }
+				}, {
+					"_off": 673, "_sz": 5, "opcode": { "_off": 673, "_sz": 1, "value": 39 },
+					"oprand": { "_off": 674, "_sz": 4, "tid": 10, "rid": 1 }
+				}, {
+					"_off": 678, "_sz": 5, "opcode": { "_off": 678, "_sz": 1, "value": 40 },
+					"oprand": { "_off": 679, "_sz": 4, "tid": 10, "rid": 1 }
+				}, {
+					"_off": 683, "_sz": 5, "opcode": { "_off": 683, "_sz": 1, "value": 41 },
+					"oprand": { "_off": 684, "_sz": 4, "tid": 17, "rid": 1 }
+				}, {
+					"_off": 688, "_sz": 1, "opcode": { "_off": 688, "_sz": 1, "value": 42 }
+				}, {
+					"_off": 689, "_sz": 2, "opcode": { "_off": 689, "_sz": 1, "value": 43 },
+					"oprand": { "_off": 690, "_sz": 1, "value": -3 }
+				}, {
+					"_off": 691, "_sz": 2, "opcode": { "_off": 691, "_sz": 1, "value": 44 },
+					"oprand": { "_off": 692, "_sz": 1, "value": -5 }
+				}, {
+					"_off": 693, "_sz": 2, "opcode": { "_off": 693, "_sz": 1, "value": 45 },
+					"oprand": { "_off": 694, "_sz": 1, "value": -7 }
+				}, {
+					"_off": 695, "_sz": 2, "opcode": { "_off": 695, "_sz": 1, "value": 46 },
+					"oprand": { "_off": 696, "_sz": 1, "value": -9 }
+				}, {
+					"_off": 697, "_sz": 2, "opcode": { "_off": 697, "_sz": 1, "value": 47 },
+					"oprand": { "_off": 698, "_sz": 1, "value": -11 }
+				}, {
+					"_off": 699, "_sz": 2, "opcode": { "_off": 699, "_sz": 1, "value": 48 },
+					"oprand": { "_off": 700, "_sz": 1, "value": -13 }
+				}, {
+					"_off": 701, "_sz": 2, "opcode": { "_off": 701, "_sz": 1, "value": 49 },
+					"oprand": { "_off": 702, "_sz": 1, "value": -15 }
+				}, {
+					"_off": 703, "_sz": 2, "opcode": { "_off": 703, "_sz": 1, "value": 50 },
+					"oprand": { "_off": 704, "_sz": 1, "value": -17 }
+				}, {
+					"_off": 705, "_sz": 2, "opcode": { "_off": 705, "_sz": 1, "value": 51 },
+					"oprand": { "_off": 706, "_sz": 1, "value": -19 }
+				}, {
+					"_off": 707, "_sz": 2, "opcode": { "_off": 707, "_sz": 1, "value": 52 },
+					"oprand": { "_off": 708, "_sz": 1, "value": -21 }
+				}, {
+					"_off": 709, "_sz": 2, "opcode": { "_off": 709, "_sz": 1, "value": 53 },
+					"oprand": { "_off": 710, "_sz": 1, "value": -23 }
+				}, {
+					"_off": 711, "_sz": 2, "opcode": { "_off": 711, "_sz": 1, "value": 54 },
+					"oprand": { "_off": 712, "_sz": 1, "value": -25 }
+				}, {
+					"_off": 713, "_sz": 2, "opcode": { "_off": 713, "_sz": 1, "value": 55 },
+					"oprand": { "_off": 714, "_sz": 1, "value": -27 }
+				}, {
+					"_off": 715, "_sz": 5, "opcode": { "_off": 715, "_sz": 1, "value": 56 },
+					"oprand": { "_off": 716, "_sz": 4, "value": -116 }
+				}, {
+					"_off": 720, "_sz": 5, "opcode": { "_off": 720, "_sz": 1, "value": 57 },
+					"oprand": { "_off": 721, "_sz": 4, "value": -121 }
+				}, {
+					"_off": 725, "_sz": 5, "opcode": { "_off": 725, "_sz": 1, "value": 58 },
+					"oprand": { "_off": 726, "_sz": 4, "value": -126 }
+				}, {
+					"_off": 730, "_sz": 5, "opcode": { "_off": 730, "_sz": 1, "value": 59 },
+					"oprand": { "_off": 731, "_sz": 4, "value": -131 }
+				}, {
+					"_off": 735, "_sz": 5, "opcode": { "_off": 735, "_sz": 1, "value": 60 },
+					"oprand": { "_off": 736, "_sz": 4, "value": -136 }
+				}, {
+					"_off": 740, "_sz": 5, "opcode": { "_off": 740, "_sz": 1, "value": 61 },
+					"oprand": { "_off": 741, "_sz": 4, "value": -141 }
+				}, {
+					"_off": 745, "_sz": 5, "opcode": { "_off": 745, "_sz": 1, "value": 62 },
+					"oprand": { "_off": 746, "_sz": 4, "value": -146 }
+				}, {
+					"_off": 750, "_sz": 5, "opcode": { "_off": 750, "_sz": 1, "value": 63 },
+					"oprand": { "_off": 751, "_sz": 4, "value": -151 }
+				}, {
+					"_off": 755, "_sz": 5, "opcode": { "_off": 755, "_sz": 1, "value": 64 },
+					"oprand": { "_off": 756, "_sz": 4, "value": -156 }
+				}, {
+					"_off": 760, "_sz": 5, "opcode": { "_off": 760, "_sz": 1, "value": 65 },
+					"oprand": { "_off": 761, "_sz": 4, "value": -161 }
+				}, {
+					"_off": 765, "_sz": 5, "opcode": { "_off": 765, "_sz": 1, "value": 66 },
+					"oprand": { "_off": 766, "_sz": 4, "value": -166 }
+				}, {
+					"_off": 770, "_sz": 5, "opcode": { "_off": 770, "_sz": 1, "value": 67 },
+					"oprand": { "_off": 771, "_sz": 4, "value": -171 }
+				}, {
+					"_off": 775, "_sz": 5, "opcode": { "_off": 775, "_sz": 1, "value": 68 },
+					"oprand": { "_off": 776, "_sz": 4, "value": -176 }
+				}, {
+					"_off": 780, "_sz": 17, "opcode": { "_off": 780, "_sz": 1, "value": 69 },
+					"oprand": { "_off": 781, "_sz": 16, "count": { "_off": 781, "_sz": 4, "value": 3 }, "targets": { "_off": 785, "_sz": 12, "values": [{ "_off": 785, "_sz": 4, "value": -193 }, { "_off": 789, "_sz": 4, "value": -109 }, { "_off": 793, "_sz": 4, "value": 310 }] } }
+				}, {
+					"_off": 797, "_sz": 1, "opcode": { "_off": 797, "_sz": 1, "value": 70 }
+				}, {
+					"_off": 798, "_sz": 1, "opcode": { "_off": 798, "_sz": 1, "value": 71 }
+				}, {
+					"_off": 799, "_sz": 1, "opcode": { "_off": 799, "_sz": 1, "value": 72 }
+				}, {
+					"_off": 800, "_sz": 1, "opcode": { "_off": 800, "_sz": 1, "value": 73 }
+				}, {
+					"_off": 801, "_sz": 1, "opcode": { "_off": 801, "_sz": 1, "value": 74 }
+				}, {
+					"_off": 802, "_sz": 1, "opcode": { "_off": 802, "_sz": 1, "value": 75 }
+				}, {
+					"_off": 803, "_sz": 1, "opcode": { "_off": 803, "_sz": 1, "value": 76 }
+				}, {
+					"_off": 804, "_sz": 1, "opcode": { "_off": 804, "_sz": 1, "value": 77 }
+				}, {
+					"_off": 805, "_sz": 1, "opcode": { "_off": 805, "_sz": 1, "value": 78 }
+				}, {
+					"_off": 806, "_sz": 1, "opcode": { "_off": 806, "_sz": 1, "value": 79 }
+				}, {
+					"_off": 807, "_sz": 1, "opcode": { "_off": 807, "_sz": 1, "value": 80 }
+				}, {
+					"_off": 808, "_sz": 1, "opcode": { "_off": 808, "_sz": 1, "value": 81 }
+				}, {
+					"_off": 809, "_sz": 1, "opcode": { "_off": 809, "_sz": 1, "value": 82 }
+				}, {
+					"_off": 810, "_sz": 1, "opcode": { "_off": 810, "_sz": 1, "value": 83 }
+				}, {
+					"_off": 811, "_sz": 1, "opcode": { "_off": 811, "_sz": 1, "value": 84 }
+				}, {
+					"_off": 812, "_sz": 1, "opcode": { "_off": 812, "_sz": 1, "value": 85 }
+				}, {
+					"_off": 813, "_sz": 1, "opcode": { "_off": 813, "_sz": 1, "value": 86 }
+				}, {
+					"_off": 814, "_sz": 1, "opcode": { "_off": 814, "_sz": 1, "value": 87 }
+				}, {
+					"_off": 815, "_sz": 1, "opcode": { "_off": 815, "_sz": 1, "value": 88 }
+				}, {
+					"_off": 816, "_sz": 1, "opcode": { "_off": 816, "_sz": 1, "value": 89 }
+				}, {
+					"_off": 817, "_sz": 1, "opcode": { "_off": 817, "_sz": 1, "value": 90 }
+				}, {
+					"_off": 818, "_sz": 1, "opcode": { "_off": 818, "_sz": 1, "value": 91 }
+				}, {
+					"_off": 819, "_sz": 1, "opcode": { "_off": 819, "_sz": 1, "value": 92 }
+				}, {
+					"_off": 820, "_sz": 1, "opcode": { "_off": 820, "_sz": 1, "value": 93 }
+				}, {
+					"_off": 821, "_sz": 1, "opcode": { "_off": 821, "_sz": 1, "value": 94 }
+				}, {
+					"_off": 822, "_sz": 1, "opcode": { "_off": 822, "_sz": 1, "value": 95 }
+				}, {
+					"_off": 823, "_sz": 1, "opcode": { "_off": 823, "_sz": 1, "value": 96 }
+				}, {
+					"_off": 824, "_sz": 1, "opcode": { "_off": 824, "_sz": 1, "value": 97 }
+				}, {
+					"_off": 825, "_sz": 1, "opcode": { "_off": 825, "_sz": 1, "value": 98 }
+				}, {
+					"_off": 826, "_sz": 1, "opcode": { "_off": 826, "_sz": 1, "value": 99 }
+				}, {
+					"_off": 827, "_sz": 1, "opcode": { "_off": 827, "_sz": 1, "value": 100 }
+				}, {
+					"_off": 828, "_sz": 1, "opcode": { "_off": 828, "_sz": 1, "value": 101 }
+				}, {
+					"_off": 829, "_sz": 1, "opcode": { "_off": 829, "_sz": 1, "value": 102 }
+				}, {
+					"_off": 830, "_sz": 1, "opcode": { "_off": 830, "_sz": 1, "value": 103 }
+				}, {
+					"_off": 831, "_sz": 1, "opcode": { "_off": 831, "_sz": 1, "value": 104 }
+				}, {
+					"_off": 832, "_sz": 1, "opcode": { "_off": 832, "_sz": 1, "value": 105 }
+				}, {
+					"_off": 833, "_sz": 1, "opcode": { "_off": 833, "_sz": 1, "value": 106 }
+				}, {
+					"_off": 834, "_sz": 1, "opcode": { "_off": 834, "_sz": 1, "value": 107 }
+				}, {
+					"_off": 835, "_sz": 1, "opcode": { "_off": 835, "_sz": 1, "value": 108 }
+				}, {
+					"_off": 836, "_sz": 1, "opcode": { "_off": 836, "_sz": 1, "value": 109 }
+				}, {
+					"_off": 837, "_sz": 1, "opcode": { "_off": 837, "_sz": 1, "value": 110 }
+				}, {
+					"_off": 838, "_sz": 5, "opcode": { "_off": 838, "_sz": 1, "value": 111 },
+					"oprand": { "_off": 839, "_sz": 4, "tid": 10, "rid": 2 }
+				}, {
+					"_off": 843, "_sz": 5, "opcode": { "_off": 843, "_sz": 1, "value": 112 },
+					"oprand": { "_off": 844, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 848, "_sz": 5, "opcode": { "_off": 848, "_sz": 1, "value": 113 },
+					"oprand": { "_off": 849, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 853, "_sz": 5, "opcode": { "_off": 853, "_sz": 1, "value": 114 },
+					"oprand": { "_off": 854, "_sz": 4, "tid": 112, "rid": 1 }
+				}, {
+					"_off": 858, "_sz": 5, "opcode": { "_off": 858, "_sz": 1, "value": 115 },
+					"oprand": { "_off": 859, "_sz": 4, "tid": 10, "rid": 3 }
+				}, {
+					"_off": 863, "_sz": 5, "opcode": { "_off": 863, "_sz": 1, "value": 116 },
+					"oprand": { "_off": 864, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 868, "_sz": 5, "opcode": { "_off": 868, "_sz": 1, "value": 117 },
+					"oprand": { "_off": 869, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 873, "_sz": 1, "opcode": { "_off": 873, "_sz": 1, "value": 118 }
+				}, {
+					"_off": 874, "_sz": 5, "opcode": { "_off": 874, "_sz": 1, "value": 121 },
+					"oprand": { "_off": 875, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 879, "_sz": 1, "opcode": { "_off": 879, "_sz": 1, "value": 122 }
+				}, {
+					"_off": 880, "_sz": 5, "opcode": { "_off": 880, "_sz": 1, "value": 123 },
+					"oprand": { "_off": 881, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 885, "_sz": 5, "opcode": { "_off": 885, "_sz": 1, "value": 124 },
+					"oprand": { "_off": 886, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 890, "_sz": 5, "opcode": { "_off": 890, "_sz": 1, "value": 125 },
+					"oprand": { "_off": 891, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 895, "_sz": 5, "opcode": { "_off": 895, "_sz": 1, "value": 126 },
+					"oprand": { "_off": 896, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 900, "_sz": 5, "opcode": { "_off": 900, "_sz": 1, "value": 127 },
+					"oprand": { "_off": 901, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 905, "_sz": 5, "opcode": { "_off": 905, "_sz": 1, "value": 128 },
+					"oprand": { "_off": 906, "_sz": 4, "tid": 10, "rid": 4 }
+				}, {
+					"_off": 910, "_sz": 5, "opcode": { "_off": 910, "_sz": 1, "value": 129 },
+					"oprand": { "_off": 911, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 915, "_sz": 1, "opcode": { "_off": 915, "_sz": 1, "value": 130 }
+				}, {
+					"_off": 916, "_sz": 1, "opcode": { "_off": 916, "_sz": 1, "value": 131 }
+				}, {
+					"_off": 917, "_sz": 1, "opcode": { "_off": 917, "_sz": 1, "value": 132 }
+				}, {
+					"_off": 918, "_sz": 1, "opcode": { "_off": 918, "_sz": 1, "value": 133 }
+				}, {
+					"_off": 919, "_sz": 1, "opcode": { "_off": 919, "_sz": 1, "value": 134 }
+				}, {
+					"_off": 920, "_sz": 1, "opcode": { "_off": 920, "_sz": 1, "value": 135 }
+				}, {
+					"_off": 921, "_sz": 1, "opcode": { "_off": 921, "_sz": 1, "value": 136 }
+				}, {
+					"_off": 922, "_sz": 1, "opcode": { "_off": 922, "_sz": 1, "value": 137 }
+				}, {
+					"_off": 923, "_sz": 1, "opcode": { "_off": 923, "_sz": 1, "value": 138 }
+				}, {
+					"_off": 924, "_sz": 1, "opcode": { "_off": 924, "_sz": 1, "value": 139 }
+				}, {
+					"_off": 925, "_sz": 5, "opcode": { "_off": 925, "_sz": 1, "value": 140 },
+					"oprand": { "_off": 926, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 930, "_sz": 5, "opcode": { "_off": 930, "_sz": 1, "value": 141 },
+					"oprand": { "_off": 931, "_sz": 4, "tid": 1, "rid": 1 }
+				}, {
+					"_off": 935, "_sz": 1, "opcode": { "_off": 935, "_sz": 1, "value": 142 }
+				}, {
+					"_off": 936, "_sz": 5, "opcode": { "_off": 936, "_sz": 1, "value": 143 },
+					"oprand": { "_off": 937, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 941, "_sz": 1, "opcode": { "_off": 941, "_sz": 1, "value": 144 }
+				}, {
+					"_off": 942, "_sz": 1, "opcode": { "_off": 942, "_sz": 1, "value": 145 }
+				}, {
+					"_off": 943, "_sz": 1, "opcode": { "_off": 943, "_sz": 1, "value": 146 }
+				}, {
+					"_off": 944, "_sz": 1, "opcode": { "_off": 944, "_sz": 1, "value": 147 }
+				}, {
+					"_off": 945, "_sz": 1, "opcode": { "_off": 945, "_sz": 1, "value": 148 }
+				}, {
+					"_off": 946, "_sz": 1, "opcode": { "_off": 946, "_sz": 1, "value": 149 }
+				}, {
+					"_off": 947, "_sz": 1, "opcode": { "_off": 947, "_sz": 1, "value": 150 }
+				}, {
+					"_off": 948, "_sz": 1, "opcode": { "_off": 948, "_sz": 1, "value": 151 }
+				}, {
+					"_off": 949, "_sz": 1, "opcode": { "_off": 949, "_sz": 1, "value": 152 }
+				}, {
+					"_off": 950, "_sz": 1, "opcode": { "_off": 950, "_sz": 1, "value": 153 }
+				}, {
+					"_off": 951, "_sz": 1, "opcode": { "_off": 951, "_sz": 1, "value": 154 }
+				}, {
+					"_off": 952, "_sz": 1, "opcode": { "_off": 952, "_sz": 1, "value": 155 }
+				}, {
+					"_off": 953, "_sz": 1, "opcode": { "_off": 953, "_sz": 1, "value": 156 }
+				}, {
+					"_off": 954, "_sz": 1, "opcode": { "_off": 954, "_sz": 1, "value": 157 }
+				}, {
+					"_off": 955, "_sz": 1, "opcode": { "_off": 955, "_sz": 1, "value": 158 }
+				}, {
+					"_off": 956, "_sz": 1, "opcode": { "_off": 956, "_sz": 1, "value": 159 }
+				}, {
+					"_off": 957, "_sz": 1, "opcode": { "_off": 957, "_sz": 1, "value": 160 }
+				}, {
+					"_off": 958, "_sz": 1, "opcode": { "_off": 958, "_sz": 1, "value": 161 }
+				}, {
+					"_off": 959, "_sz": 1, "opcode": { "_off": 959, "_sz": 1, "value": 162 }
+				}, {
+					"_off": 960, "_sz": 5, "opcode": { "_off": 960, "_sz": 1, "value": 163 },
+					"oprand": { "_off": 961, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 965, "_sz": 5, "opcode": { "_off": 965, "_sz": 1, "value": 164 },
+					"oprand": { "_off": 966, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 970, "_sz": 5, "opcode": { "_off": 970, "_sz": 1, "value": 165 },
+					"oprand": { "_off": 971, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 975, "_sz": 1, "opcode": { "_off": 975, "_sz": 1, "value": 179 }
+				}, {
+					"_off": 976, "_sz": 1, "opcode": { "_off": 976, "_sz": 1, "value": 180 }
+				}, {
+					"_off": 977, "_sz": 1, "opcode": { "_off": 977, "_sz": 1, "value": 181 }
+				}, {
+					"_off": 978, "_sz": 1, "opcode": { "_off": 978, "_sz": 1, "value": 182 }
+				}, {
+					"_off": 979, "_sz": 1, "opcode": { "_off": 979, "_sz": 1, "value": 183 }
+				}, {
+					"_off": 980, "_sz": 1, "opcode": { "_off": 980, "_sz": 1, "value": 184 }
+				}, {
+					"_off": 981, "_sz": 1, "opcode": { "_off": 981, "_sz": 1, "value": 185 }
+				}, {
+					"_off": 982, "_sz": 1, "opcode": { "_off": 982, "_sz": 1, "value": 186 }
+				}, {
+					"_off": 983, "_sz": 5, "opcode": { "_off": 983, "_sz": 1, "value": 194 },
+					"oprand": { "_off": 984, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 988, "_sz": 1, "opcode": { "_off": 988, "_sz": 1, "value": 195 }
+				}, {
+					"_off": 989, "_sz": 5, "opcode": { "_off": 989, "_sz": 1, "value": 198 },
+					"oprand": { "_off": 990, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 994, "_sz": 5, "opcode": { "_off": 994, "_sz": 1, "value": 208 },
+					"oprand": { "_off": 995, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 999, "_sz": 1, "opcode": { "_off": 999, "_sz": 1, "value": 209 }
+				}, {
+					"_off": 1000, "_sz": 1, "opcode": { "_off": 1000, "_sz": 1, "value": 210 }
+				}, {
+					"_off": 1001, "_sz": 1, "opcode": { "_off": 1001, "_sz": 1, "value": 211 }
+				}, {
+					"_off": 1002, "_sz": 1, "opcode": { "_off": 1002, "_sz": 1, "value": 212 }
+				}, {
+					"_off": 1003, "_sz": 1, "opcode": { "_off": 1003, "_sz": 1, "value": 213 }
+				}, {
+					"_off": 1004, "_sz": 1, "opcode": { "_off": 1004, "_sz": 1, "value": 214 }
+				}, {
+					"_off": 1005, "_sz": 1, "opcode": { "_off": 1005, "_sz": 1, "value": 215 }
+				}, {
+					"_off": 1006, "_sz": 1, "opcode": { "_off": 1006, "_sz": 1, "value": 216 }
+				}, {
+					"_off": 1007, "_sz": 1, "opcode": { "_off": 1007, "_sz": 1, "value": 217 }
+				}, {
+					"_off": 1008, "_sz": 1, "opcode": { "_off": 1008, "_sz": 1, "value": 218 }
+				}, {
+					"_off": 1009, "_sz": 1, "opcode": { "_off": 1009, "_sz": 1, "value": 219 }
+				}, {
+					"_off": 1010, "_sz": 1, "opcode": { "_off": 1010, "_sz": 1, "value": 220 }
+				}, {
+					"_off": 1011, "_sz": 5, "opcode": { "_off": 1011, "_sz": 1, "value": 221 },
+					"oprand": { "_off": 1012, "_sz": 4, "value": -412 }
+				}, {
+					"_off": 1016, "_sz": 2, "opcode": { "_off": 1016, "_sz": 1, "value": 222 },
+					"oprand": { "_off": 1017, "_sz": 1, "value": 89 }
+				}, {
+					"_off": 1018, "_sz": 1, "opcode": { "_off": 1018, "_sz": 1, "value": 223 }
+				}, {
+					"_off": 1019, "_sz": 1, "opcode": { "_off": 1019, "_sz": 1, "value": 224 }
+				}, {
+					"_off": 1020, "_sz": 2, "opcode": { "_off": 1020, "_sz": 2, "value": 254 }
+				}, {
+					"_off": 1022, "_sz": 2, "opcode": { "_off": 1022, "_sz": 2, "value": 510 }
+				}, {
+					"_off": 1024, "_sz": 2, "opcode": { "_off": 1024, "_sz": 2, "value": 766 }
+				}, {
+					"_off": 1026, "_sz": 2, "opcode": { "_off": 1026, "_sz": 2, "value": 1022 }
+				}, {
+					"_off": 1028, "_sz": 2, "opcode": { "_off": 1028, "_sz": 2, "value": 1278 }
+				}, {
+					"_off": 1030, "_sz": 2, "opcode": { "_off": 1030, "_sz": 2, "value": 1534 }
+				}, {
+					"_off": 1032, "_sz": 6, "opcode": { "_off": 1032, "_sz": 2, "value": 1790 },
+					"oprand": { "_off": 1034, "_sz": 4, "tid": 10, "rid": 2 }
+				}, {
+					"_off": 1038, "_sz": 6, "opcode": { "_off": 1038, "_sz": 2, "value": 2046 },
+					"oprand": { "_off": 1040, "_sz": 4, "tid": 10, "rid": 2 }
+				}, {
+					"_off": 1044, "_sz": 6, "opcode": { "_off": 1044, "_sz": 2, "value": 2558 },
+					"oprand": { "_off": 1046, "_sz": 4, "value": 184420862 }
+				}, {
+					"_off": 1050, "_sz": 6, "opcode": { "_off": 1050, "_sz": 2, "value": 2814 },
+					"oprand": { "_off": 1052, "_sz": 4, "value": 201198590 }
+				}, {
+					"_off": 1056, "_sz": 6, "opcode": { "_off": 1056, "_sz": 2, "value": 3326 },
+					"oprand": { "_off": 1058, "_sz": 4, "value": 234753278 }
+				}, {
+					"_off": 1062, "_sz": 6, "opcode": { "_off": 1062, "_sz": 2, "value": 3582 },
+					"oprand": { "_off": 1064, "_sz": 4, "value": 251531006 }
+				}, {
+					"_off": 1068, "_sz": 2, "opcode": { "_off": 1068, "_sz": 2, "value": 4094 }
+				}, {
+					"_off": 1070, "_sz": 2, "opcode": { "_off": 1070, "_sz": 2, "value": 4606 }
+				}, {
+					"_off": 1072, "_sz": 3, "opcode": { "_off": 1072, "_sz": 2, "value": 4862 },
+					"oprand": { "_off": 1074, "_sz": 1, "value": 1 }
+				}, {
+					"_off": 1075, "_sz": 2, "opcode": { "_off": 1075, "_sz": 2, "value": 5118 }
+				}, {
+					"_off": 1077, "_sz": 2, "opcode": { "_off": 1077, "_sz": 2, "value": 5374 }
+				}, {
+					"_off": 1079, "_sz": 6, "opcode": { "_off": 1079, "_sz": 2, "value": 5630 },
+					"oprand": { "_off": 1081, "_sz": 4, "tid": 1, "rid": 3 }
+				}, {
+					"_off": 1085, "_sz": 6, "opcode": { "_off": 1085, "_sz": 2, "value": 5886 },
+					"oprand": { "_off": 1087, "_sz": 4, "tid": 27, "rid": 2 }
+				}, {
+					"_off": 1091, "_sz": 2, "opcode": { "_off": 1091, "_sz": 2, "value": 6142 }
+				}, {
+					"_off": 1093, "_sz": 2, "opcode": { "_off": 1093, "_sz": 2, "value": 6398 }
+				}, {
+					"_off": 1095, "_sz": 2, "opcode": { "_off": 1095, "_sz": 2, "value": 6910 }
+				}, {
+					"_off": 1097, "_sz": 6, "opcode": { "_off": 1097, "_sz": 2, "value": 7422 },
+					"oprand": { "_off": 1099, "_sz": 4, "tid": 27, "rid": 1 }
+				}, {
+					"_off": 1103, "_sz": 2, "opcode": { "_off": 1103, "_sz": 2, "value": 7678 }
+				}, {
+					"_off": 1105, "_sz": 2, "opcode": { "_off": 1105, "_sz": 2, "value": 7934 }
+				}]
+			});
+		});
+
+		test("ILEHSection.Simple", () => {
+			const mr = peEH.mdtMethodDef.values[1];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 648, "_sz": 16, "values": [{
+					"_off": 648, "_sz": 16,
+					"Kind": { "_off": 648, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 649, "_sz": 1 },
+					"Padding": { "_off": 650, "_sz": 2 },
+					"Clauses": {
+						"_off": 652, "_sz": 12, "values": [{
+							"_off": 652, "_sz": 12,
+							"Flags": { "_off": 652, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 654, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 656, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 657, "_sz": 2, "value": 15 },
+							"HandlerLength": { "_off": 659, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 660, "_sz": 4, "value": 0x01000003 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 16
+				}]
+			});
+		});
+
+		test("ILEHSection.SimpleFull", () => {
+			const mr = peEH.mdtMethodDef.values[2];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 708, "_sz": 52, "values": [{
+					"_off": 708, "_sz": 52,
+					"Kind": { "_off": 708, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 709, "_sz": 1 },
+					"Padding": { "_off": 710, "_sz": 2 },
+					"Clauses": {
+						"_off": 712, "_sz": 48, "values": [{
+							"_off": 712, "_sz": 12,
+							"Flags": { "_off": 712, "_sz": 2, "value": 1 },
+							"TryOffset": { "_off": 714, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 716, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 717, "_sz": 2, "value": 18 },
+							"HandlerLength": { "_off": 719, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 720, "_sz": 4, "value": 15 },
+							"usage": 2
+						}, {
+							"_off": 724, "_sz": 12,
+							"Flags": { "_off": 724, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 726, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 728, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 729, "_sz": 2, "value": 23 },
+							"HandlerLength": { "_off": 731, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 732, "_sz": 4, "value": 0x01000003 },
+							"usage": 1
+						}, {
+							"_off": 736, "_sz": 12,
+							"Flags": { "_off": 736, "_sz": 2, "value": 4 },
+							"TryOffset": { "_off": 738, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 740, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 741, "_sz": 2, "value": 28 },
+							"HandlerLength": { "_off": 743, "_sz": 1, "value": 1 },
+							"ClassTokenOrFilterOffset": { "_off": 744, "_sz": 4, "value": 0x01000003 },
+							"usage": 1
+						}, {
+							"_off": 748, "_sz": 12,
+							"Flags": { "_off": 748, "_sz": 2, "value": 2 },
+							"TryOffset": { "_off": 750, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 752, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 753, "_sz": 2, "value": 29 },
+							"HandlerLength": { "_off": 755, "_sz": 1, "value": 1 },
+							"ClassTokenOrFilterOffset": { "_off": 756, "_sz": 4, "value": 0x01000003 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 52
+				}]
+			});
+		});
+
+		test("ILEHSection.ComplicatedFull", () => {
+			const mr = peEH.mdtMethodDef.values[3];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 916, "_sz": 100, "values": [{
+					"_off": 916, "_sz": 100,
+					"Kind": { "_off": 916, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 917, "_sz": 1 },
+					"Padding": { "_off": 918, "_sz": 2 },
+					"Clauses": {
+						"_off": 920, "_sz": 96, "values": [{
+							"_off": 920, "_sz": 12,
+							"Flags": { "_off": 920, "_sz": 2, "value": 1 },
+							"TryOffset": { "_off": 922, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 924, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 925, "_sz": 2, "value": 28 },
+							"HandlerLength": { "_off": 927, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 928, "_sz": 4, "value": 15 },
+							"usage": 2
+						}, {
+							"_off": 932, "_sz": 12,
+							"Flags": { "_off": 932, "_sz": 2, "value": 2 },
+							"TryOffset": { "_off": 934, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 936, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 937, "_sz": 2, "value": 43 },
+							"HandlerLength": { "_off": 939, "_sz": 1, "value": 11 },
+							"ClassTokenOrFilterOffset": { "_off": 940, "_sz": 4, "value": 15 },
+							"usage": 2
+						}, {
+							"_off": 944, "_sz": 12,
+							"Flags": { "_off": 944, "_sz": 2, "value": 1 },
+							"TryOffset": { "_off": 946, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 948, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 949, "_sz": 2, "value": 67 },
+							"HandlerLength": { "_off": 951, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 952, "_sz": 4, "value": 54 },
+							"usage": 2
+						}, {
+							"_off": 956, "_sz": 12,
+							"Flags": { "_off": 956, "_sz": 2, "value": 4 },
+							"TryOffset": { "_off": 958, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 960, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 961, "_sz": 2, "value": 82 },
+							"HandlerLength": { "_off": 963, "_sz": 1, "value": 11 },
+							"ClassTokenOrFilterOffset": { "_off": 964, "_sz": 4, "value": 54 },
+							"usage": 2
+						}, {
+							"_off": 968, "_sz": 12,
+							"Flags": { "_off": 968, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 970, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 972, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 973, "_sz": 2, "value": 93 },
+							"HandlerLength": { "_off": 975, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 976, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 980, "_sz": 12,
+							"Flags": { "_off": 980, "_sz": 2, "value": 2 },
+							"TryOffset": { "_off": 982, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 984, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 985, "_sz": 2, "value": 108 },
+							"HandlerLength": { "_off": 987, "_sz": 1, "value": 11 },
+							"ClassTokenOrFilterOffset": { "_off": 988, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 992, "_sz": 12,
+							"Flags": { "_off": 992, "_sz": 2, "value": 2 },
+							"TryOffset": { "_off": 994, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 996, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 997, "_sz": 2, "value": 119 },
+							"HandlerLength": { "_off": 999, "_sz": 1, "value": 11 },
+							"ClassTokenOrFilterOffset": { "_off": 1000, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1004, "_sz": 12,
+							"Flags": { "_off": 1004, "_sz": 2, "value": 4 },
+							"TryOffset": { "_off": 1006, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1008, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 1009, "_sz": 2, "value": 130 },
+							"HandlerLength": { "_off": 1011, "_sz": 1, "value": 11 },
+							"ClassTokenOrFilterOffset": { "_off": 1012, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 100
+				}]
+			});
+		});
+
+		test("ILEHSection.Embedded2Level", () => {
+			const mr = peEH.mdtMethodDef.values[4];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 1096, "_sz": 28, "values": [{
+					"_off": 1096, "_sz": 28,
+					"Kind": { "_off": 1096, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 1097, "_sz": 1 },
+					"Padding": { "_off": 1098, "_sz": 2 },
+					"Clauses": {
+						"_off": 1100, "_sz": 24, "values": [{
+							"_off": 1100, "_sz": 12,
+							"Flags": { "_off": 1100, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1102, "_sz": 2, "value": 10 },
+							"TryLength": { "_off": 1104, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 1105, "_sz": 2, "value": 25 },
+							"HandlerLength": { "_off": 1107, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1108, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1112, "_sz": 12,
+							"Flags": { "_off": 1112, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1114, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1116, "_sz": 1, "value": 50 },
+							"HandlerOffset": { "_off": 1117, "_sz": 2, "value": 50 },
+							"HandlerLength": { "_off": 1119, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1120, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 28
+				}]
+			});
+		});
+
+		test("ILEHSection.Embedded2LevelContinuous", () => {
+			const mr = peEH.mdtMethodDef.values[5];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 1256, "_sz": 64, "values": [{
+					"_off": 1256, "_sz": 64,
+					"Kind": { "_off": 1256, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 1257, "_sz": 1 },
+					"Padding": { "_off": 1258, "_sz": 2 },
+					"Clauses": {
+						"_off": 1260, "_sz": 60, "values": [{
+							"_off": 1260, "_sz": 12,
+							"Flags": { "_off": 1260, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1262, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1264, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 1265, "_sz": 2, "value": 15 },
+							"HandlerLength": { "_off": 1267, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1268, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1272, "_sz": 12,
+							"Flags": { "_off": 1272, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1274, "_sz": 2, "value": 30 },
+							"TryLength": { "_off": 1276, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 1277, "_sz": 2, "value": 45 },
+							"HandlerLength": { "_off": 1279, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1280, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1284, "_sz": 12,
+							"Flags": { "_off": 1284, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1286, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1288, "_sz": 1, "value": 60 },
+							"HandlerOffset": { "_off": 1289, "_sz": 2, "value": 60 },
+							"HandlerLength": { "_off": 1291, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1292, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1296, "_sz": 12,
+							"Flags": { "_off": 1296, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1298, "_sz": 2, "value": 75 },
+							"TryLength": { "_off": 1300, "_sz": 1, "value": 15 },
+							"HandlerOffset": { "_off": 1301, "_sz": 2, "value": 90 },
+							"HandlerLength": { "_off": 1303, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1304, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1308, "_sz": 12,
+							"Flags": { "_off": 1308, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1310, "_sz": 2, "value": 75 },
+							"TryLength": { "_off": 1312, "_sz": 1, "value": 30 },
+							"HandlerOffset": { "_off": 1313, "_sz": 2, "value": 105 },
+							"HandlerLength": { "_off": 1315, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1316, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 64
+				}]
+			});
+		});
+
+		test("ILEHSection.Embedded3Level", () => {
+			const mr = peEH.mdtMethodDef.values[6];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 1416, "_sz": 100, "values": [{
+					"_off": 1416, "_sz": 100,
+					"Kind": { "_off": 1416, "_sz": 1, "value": 1 },
+					"DataSizeBytes": { "_off": 1417, "_sz": 1 },
+					"Padding": { "_off": 1418, "_sz": 2 },
+					"Clauses": {
+						"_off": 1420, "_sz": 96, "values": [{
+							"_off": 1420, "_sz": 12,
+							"Flags": { "_off": 1420, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1422, "_sz": 2, "value": 5 },
+							"TryLength": { "_off": 1424, "_sz": 1, "value": 10 },
+							"HandlerOffset": { "_off": 1425, "_sz": 2, "value": 15 },
+							"HandlerLength": { "_off": 1427, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1428, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1432, "_sz": 12,
+							"Flags": { "_off": 1432, "_sz": 2, "value": 1 },
+							"TryOffset": { "_off": 1434, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1436, "_sz": 1, "value": 5 },
+							"HandlerOffset": { "_off": 1437, "_sz": 2, "value": 22 },
+							"HandlerLength": { "_off": 1439, "_sz": 1, "value": 15 },
+							"ClassTokenOrFilterOffset": { "_off": 1440, "_sz": 4, "value": 5 },
+							"usage": 2
+						}, {
+							"_off": 1444, "_sz": 12,
+							"Flags": { "_off": 1444, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1446, "_sz": 2, "value": 0 },
+							"TryLength": { "_off": 1448, "_sz": 1, "value": 5 },
+							"HandlerOffset": { "_off": 1449, "_sz": 2, "value": 37 },
+							"HandlerLength": { "_off": 1451, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1452, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1456, "_sz": 12,
+							"Flags": { "_off": 1456, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1458, "_sz": 2, "value": 42 },
+							"TryLength": { "_off": 1460, "_sz": 1, "value": 5 },
+							"HandlerOffset": { "_off": 1461, "_sz": 2, "value": 47 },
+							"HandlerLength": { "_off": 1463, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1464, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1468, "_sz": 12,
+							"Flags": { "_off": 1468, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1470, "_sz": 2, "value": 52 },
+							"TryLength": { "_off": 1472, "_sz": 1, "value": 5 },
+							"HandlerOffset": { "_off": 1473, "_sz": 2, "value": 57 },
+							"HandlerLength": { "_off": 1475, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1476, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1480, "_sz": 12,
+							"Flags": { "_off": 1480, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1482, "_sz": 2, "value": 42 },
+							"TryLength": { "_off": 1484, "_sz": 1, "value": 20 },
+							"HandlerOffset": { "_off": 1485, "_sz": 2, "value": 62 },
+							"HandlerLength": { "_off": 1487, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1488, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1492, "_sz": 12,
+							"Flags": { "_off": 1492, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1494, "_sz": 2, "value": 67 },
+							"TryLength": { "_off": 1496, "_sz": 1, "value": 5 },
+							"HandlerOffset": { "_off": 1497, "_sz": 2, "value": 72 },
+							"HandlerLength": { "_off": 1499, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1500, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}, {
+							"_off": 1504, "_sz": 12,
+							"Flags": { "_off": 1504, "_sz": 2, "value": 0 },
+							"TryOffset": { "_off": 1506, "_sz": 2, "value": 42 },
+							"TryLength": { "_off": 1508, "_sz": 1, "value": 35 },
+							"HandlerOffset": { "_off": 1509, "_sz": 2, "value": 77 },
+							"HandlerLength": { "_off": 1511, "_sz": 1, "value": 5 },
+							"ClassTokenOrFilterOffset": { "_off": 1512, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 100
+				}]
+			});
+		});
+
+		test("ILEHSection.FatSection", () => {
+			const mr = peEH.mdtMethodDef.values[7];
+			const m = PE.loadIL(peEH, mr);
+			expect(m.Sections).toEqual({
+				"_off": 1804, "_sz": 28, "values": [{
+					"_off": 1804, "_sz": 28,
+					"Kind": { "_off": 1804, "_sz": 1, "value": 65 },
+					"DataSizeBytes": { "_off": 1805, "_sz": 3 },
+					"Clauses": {
+						"_off": 1808, "_sz": 24, "values": [{
+							"_off": 1808, "_sz": 24,
+							"Flags": { "_off": 1808, "_sz": 4, "value": 0 },
+							"TryOffset": { "_off": 1812, "_sz": 4, "value": 0 },
+							"TryLength": { "_off": 1816, "_sz": 4, "value": 265 },
+							"HandlerOffset": { "_off": 1820, "_sz": 4, "value": 265 },
+							"HandlerLength": { "_off": 1824, "_sz": 4, "value": 10 },
+							"ClassTokenOrFilterOffset": { "_off": 1828, "_sz": 4, "value": 16777219 },
+							"usage": 1
+						}]
+					},
+					"dataSize": 28
 				}]
 			});
 		});

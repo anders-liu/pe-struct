@@ -51,3 +51,6 @@ ExceptionHandling:
 
 FieldRva:
 	"C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" FieldRva.il /OUTPUT=FieldRva.exe
+
+FullIL:
+	"C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" FullIL.il /OUTPUT=FullIL.exe

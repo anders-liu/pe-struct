@@ -9,9 +9,11 @@ describe("PeUtil Tests", () => {
 	const pe64 = TestCases.load("Simple.X64.exe__");
 	const peDll = TestCases.load("Simple.dll__");
 	const peNative = TestCases.load("SimpleNativeApp.exe__");
+	const peFullMD = TestCases.load("FullMetadataTables.Assembly.exe__");
+	const peSigned = TestCases.load("Simple.Signed.exe__");
 
 	test("copyData", () => {
-		const buf = PE.copyData(pe32, { _off: 0, _sz: 2});
+		const buf = PE.copyData(pe32, { _off: 0, _sz: 2 });
 		const arr = new Uint8Array(buf);
 		expect(arr).toEqual(Uint8Array.from([0x4D, 0x5A]));
 	});
@@ -40,6 +42,16 @@ describe("PeUtil Tests", () => {
 		expect(PE.hasMetadata(pe32)).toEqual(true);
 		expect(PE.hasMetadata(pe64)).toEqual(true);
 		expect(PE.hasMetadata(peNative)).toEqual(false);
+	});
+
+	test("hasManRes", () => {
+		expect(PE.hasManRes(pe32)).toEqual(false);
+		expect(PE.hasManRes(peFullMD)).toEqual(true);
+	});
+
+	test("hasSNSignature", () => {
+		expect(PE.hasSNSignature(pe32)).toEqual(false);
+		expect(PE.hasSNSignature(peSigned)).toEqual(true);
 	});
 
 	test("hasIL", () => {
