@@ -1,3 +1,6 @@
+# 0.9.3  (11/23/2016)
+* Change output type to UMD library.
+
 # 0.9.2  (11/18/2016)
 * No functional update, re-publish 0.9.1 for missing files.
 
