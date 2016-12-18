@@ -1,3 +1,6 @@
+# 0.9.4  (12/17/2016)
+* Export getSectionHeaderByRva and getSectionHeaderByOffset functions from utils.
+
 # 0.9.3  (11/23/2016)
 * Change output type to UMD library.
 

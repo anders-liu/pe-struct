@@ -1,6 +1,6 @@
 {
     "name": "pe-struct",
-    "version": "0.9.3",
+    "version": "0.9.4",
     "description": "A JavaScript library for loading PE (Portable Executable) file as a plain structural object.",
     "author": "Anders Liu",
     "license": "MIT",
