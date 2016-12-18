@@ -30,12 +30,30 @@ describe("PeUtil Tests", () => {
 
 	test("rvaToOffset", () => {
 		expect(PE.rvaToOffset(pe32, 0x2000)).toEqual(0x200);
+		expect(PE.rvaToOffset(pe32, 0x44E3)).toEqual(0xAE3);
+		expect(PE.rvaToOffset(pe32, 0x44E4)).toEqual(0);
 		expect(PE.rvaToOffset(pe32, 0xFFFFFFFF)).toEqual(0);
 	});
 
 	test("offsetToRva", () => {
 		expect(PE.offsetToRva(pe32, 0x200)).toEqual(0x2000);
+		expect(PE.offsetToRva(pe32, 0xAE3)).toEqual(0x44E3);
+		expect(PE.offsetToRva(pe32, 0xAE4)).toEqual(0);
 		expect(PE.offsetToRva(pe32, 0xFFFFFFFF)).toEqual(0);
+	});
+
+	test("getSectionHeaderByRva", () => {
+		expect(PE.getSectionHeaderByRva(pe32, 0x2000)).toEqual(pe32.sectionHeaders.values[0]);
+		expect(PE.getSectionHeaderByRva(pe32, 0x44E3)).toEqual(pe32.sectionHeaders.values[1]);
+		expect(PE.getSectionHeaderByRva(pe32, 0x44E4)).toBeNull();
+		expect(PE.getSectionHeaderByRva(pe32, 0xFFFFFFFF)).toBeNull();
+	});
+
+	test("getSectionHeaderByOffset", () => {
+		expect(PE.getSectionHeaderByOffset(pe32, 0x200)).toEqual(pe32.sectionHeaders.values[0]);
+		expect(PE.getSectionHeaderByOffset(pe32, 0xAE3)).toEqual(pe32.sectionHeaders.values[1]);
+		expect(PE.getSectionHeaderByOffset(pe32, 0xAE4)).toBeNull();
+		expect(PE.getSectionHeaderByOffset(pe32, 0xFFFFFFFF)).toBeNull();
 	});
 
 	test("hasMetadata", () => {

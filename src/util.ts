@@ -17,7 +17,7 @@ export function isDll(pe: PE.PeStruct): boolean {
 }
 
 export function rvaToOffset(pe: PE.PeStruct, rva: number): number {
-	var sh = getSectionByRva(pe, rva);
+	var sh = getSectionHeaderByRva(pe, rva);
 	if (sh == null)
 		return 0;
 
@@ -25,14 +25,14 @@ export function rvaToOffset(pe: PE.PeStruct, rva: number): number {
 }
 
 export function offsetToRva(pe: PE.PeStruct, offset: number): number {
-	var sh = getSectionByOffset(pe, offset);
+	var sh = getSectionHeaderByOffset(pe, offset);
 	if (sh == null)
 		return 0;
 
 	return offset - sh.PointerToRawData.value + sh.VirtualAddress.value;
 }
 
-function getSectionByRva(pe: PE.PeStruct, rva: number): PE.SectionHeader {
+export function getSectionHeaderByRva(pe: PE.PeStruct, rva: number): PE.SectionHeader {
 	if (pe.sectionHeaders == null)
 		return null;
 
@@ -45,13 +45,13 @@ function getSectionByRva(pe: PE.PeStruct, rva: number): PE.SectionHeader {
 	return null;
 }
 
-function getSectionByOffset(pe: PE.PeStruct, offset: number): PE.SectionHeader {
+export function getSectionHeaderByOffset(pe: PE.PeStruct, offset: number): PE.SectionHeader {
 	if (pe.sectionHeaders == null)
 		return null;
 
 	for (let sh of pe.sectionHeaders.values) {
 		if (offset >= sh.PointerToRawData.value
-			&& offset < sh.PointerToRawData.value + sh.SizeOfRawData.value)
+			&& offset < sh.PointerToRawData.value + sh.VirtualSize.value)
 			return sh;
 	}
 

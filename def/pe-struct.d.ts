@@ -1462,6 +1462,8 @@ declare namespace PEStruct {
 	export function isDll(pe: PeStruct): boolean;
 	export function rvaToOffset(pe: PeStruct, rva: number): number;
 	export function offsetToRva(pe: PeStruct, offset: number): number;
+	export function getSectionHeaderByRva(pe: PeStruct, rva: number): SectionHeader;
+	export function getSectionHeaderByOffset(pe: PeStruct, offset: number): SectionHeader;
 	export function hasMetadata(pe: PeStruct): boolean;
 	export function hasManRes(pe: PeStruct): boolean
 	export function hasSNSignature(pe: PeStruct): boolean;
